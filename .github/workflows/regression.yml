@@ -60,6 +60,12 @@ jobs:
       failure() &&
       contains(fromJSON('["schedule","workflow_dispatch"]'), github.event_name)
     runs-on: ubuntu-latest
+    # claude-code-action authenticates via GitHub OIDC and fails with
+    # "Could not fetch an OIDC token" without this. The default token has no
+    # id-token scope, so the omission is silent until the job actually runs.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -85,7 +91,13 @@ jobs:
           fi
 
       - name: Claude triages the failure into Linear
+        id: claude
         if: steps.capability.outputs.claude == 'true'
+        # Do not let a triage failure end the job. If Claude cannot run, the
+        # deterministic filer below must still get its turn — otherwise a broken
+        # credential means NOTHING is filed, which looks exactly like "no bugs
+        # found". That is the failure this run actually produced.
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
@@ -101,8 +113,8 @@ jobs:
 
       # No model in this path. The thesis of Stage 6 is that work ARRIVES without a
       # human filing it — that should not depend on a model being reachable.
-      - name: Deterministic triage (no Anthropic key)
-        if: steps.capability.outputs.claude != 'true'
+      - name: Deterministic triage (no Claude, or Claude failed)
+        if: steps.capability.outputs.claude != 'true' || steps.claude.outcome == 'failure'
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
@@ -110,10 +122,13 @@ jobs:
           TRIGGER: ${{ github.event_name }}
         run: python3 file_regression_bug.py report.json
 
-      # Cheap insurance: the triage job hand-rolls Linear calls and will otherwise
-      # break SILENTLY, looking like "no bugs were filed" rather than an error.
-      - name: Assert triage actually did something
-        run: |
-          test -f triage-result.json || { echo "::error::triage produced no result"; exit 1; }
-          grep -q '"created"\|"commented"' triage-result.json \
-            || { echo "::error::triage neither created nor commented on an issue"; exit 1; }
+      # Cheap insurance, and it must not depend on which path ran. Ask Linear
+      # directly: did an issue get created or touched in the last ten minutes?
+      # Checking a local file only proved the deterministic path worked, and the
+      # Claude path never writes one.
+      - name: Assert an issue actually reached Linear
+        if: always()
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+        run: python3 verify_triage.py
