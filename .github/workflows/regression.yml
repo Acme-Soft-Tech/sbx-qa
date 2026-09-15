@@ -35,6 +35,10 @@ jobs:
         with: { name: traces, path: traces/ }
 
       - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: report, path: report.json }
+
+      - if: always()
         env: { SBX_DB_URL: "${{ secrets.SBX_DB_URL }}", SBX_BASE_URL: "${{ vars.SBX_BASE_URL }}" }
         run: uv run python report_to_db.py report.json
 
@@ -45,9 +49,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: traces, path: traces/ }
+        with: { name: report, path: . }
+
+      - id: capability
+        env: { ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}" }
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then echo "claude=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "claude=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No ANTHROPIC_API_KEY — falling back to deterministic triage. \
+            The issue will be filed, but without a diagnosis."
+          fi
 
       - name: Claude triages the failure into Linear
+        if: steps.capability.outputs.claude == 'true'
         uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -59,6 +74,16 @@ jobs:
             Deduplicate against open SBX bugs before filing anything.
             File or comment on a Linear bug with labels: bug, qa-regression.
             Then write an intent.md for it in sbx-sdlc so Stage 1 has an artifact.
+
+      # No model in this path. The thesis of Stage 6 is that work ARRIVES without a
+      # human filing it — that should not depend on a model being reachable.
+      - name: Deterministic triage (no Anthropic key)
+        if: steps.capability.outputs.claude != 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+          SBX_BASE_URL: ${{ vars.SBX_BASE_URL }}
+        run: python3 file_regression_bug.py report.json
 
       # Cheap insurance: the triage job hand-rolls Linear calls and will otherwise
       # break SILENTLY, looking like "no bugs were filed" rather than an error.
