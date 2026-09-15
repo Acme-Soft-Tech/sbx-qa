@@ -53,24 +53,34 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: report, path: . }
 
+      # Two ways to authenticate, and the rig should use whichever exists.
+      # An API key is billed per token; an OAuth token from `claude setup-token`
+      # draws on a Claude SUBSCRIPTION instead. That difference matters for the
+      # eval suite: a runaway loop on a subscription does not cost money, it
+      # consumes the rate limit a person is also trying to use.
       - id: capability
-        env: { ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}" }
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ -n "$ANTHROPIC_API_KEY" ]; then echo "claude=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "claude=true" >> "$GITHUB_OUTPUT"
           else
             echo "claude=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No ANTHROPIC_API_KEY — falling back to deterministic triage. \
-            The issue will be filed, but without a diagnosis."
+            echo "::warning::Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set \
+            — falling back to deterministic triage. The issue will still be filed, \
+            but without a diagnosis."
           fi
 
       - name: Claude triages the failure into Linear
         if: steps.capability.outputs.claude == 'true'
         uses: anthropics/claude-code-action@v1
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
         with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             The scheduled acceptance suite failed. Read report.json and the traces.
             Deduplicate against open SBX bugs before filing anything.
