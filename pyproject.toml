@@ -7,6 +7,7 @@ dependencies = [
     "pytest-rerunfailures>=14.0",
     "playwright>=1.48",
     "psycopg[binary]>=3.2",
+    "pytest-json-report>=1.5",   # regression.yml passes --json-report
 ]
 
 # The real QA repo has neither a linter nor a formatter while the web repo has both,
