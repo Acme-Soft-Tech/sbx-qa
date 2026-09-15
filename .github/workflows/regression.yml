@@ -51,7 +51,14 @@ jobs:
 
   triage:
     needs: test
-    if: failure() && github.event_name == 'schedule'
+    # Schedule is the honest version of this experiment — nobody present, nobody
+    # looking. But waiting a full day to find out whether the chain works at all is
+    # a slow way to debug a webhook, so a manual dispatch fires it too. The issue
+    # body records which trigger it was, because "work arrived that no human filed"
+    # is a weaker claim when a human pressed the button.
+    if: >-
+      failure() &&
+      contains(fromJSON('["schedule","workflow_dispatch"]'), github.event_name)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +106,8 @@ jobs:
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
-          SBX_BASE_URL: ${{ vars.SBX_BASE_URL }}
+          SBX_BASE_URL: ${{ inputs.base_url || vars.SBX_BASE_URL }}
+          TRIGGER: ${{ github.event_name }}
         run: python3 file_regression_bug.py report.json
 
       # Cheap insurance: the triage job hand-rolls Linear calls and will otherwise
