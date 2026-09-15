@@ -69,7 +69,8 @@ def main(report_path: str = "report.json") -> int:
     )
     detail = "\n".join(f"- `{n}`" for n in nodeids)
     body = (
-        f"Filed automatically by the scheduled acceptance run. **No human filed this.**\n\n"
+        f"Filed automatically by the acceptance run "
+        f"(trigger: `{os.environ.get('TRIGGER', 'unknown')}`). **No human filed this.**\n\n"
         f"Failing tests ({len(nodeids)}):\n{detail}\n\n"
         f"- Run: {run_url}\n"
         f"- Base URL under test: `{os.environ.get('SBX_BASE_URL', 'unknown')}`\n\n"
