@@ -1,0 +1,4 @@
+# GitHub blocks self-approval, so the rig needs a reviewer who is not the author.
+# DELIBERATE EXCEPTION to the sandbox identity boundary: vspl-alroy is the work GitHub
+# identity, used here only to satisfy the G5 review gate. Decided 2026-09-15.
+*  @vspl-alroy

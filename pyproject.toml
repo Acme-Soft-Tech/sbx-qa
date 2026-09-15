@@ -1,0 +1,19 @@
+[project]
+name = "sbx-qa"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>=8.3",
+    "pytest-rerunfailures>=14.0",
+    "playwright>=1.48",
+    "psycopg[binary]>=3.2",
+]
+
+# The real QA repo has neither a linter nor a formatter while the web repo has both,
+# so agent-written Python has nothing holding its shape. Build the habit here.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

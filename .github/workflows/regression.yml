@@ -1,0 +1,69 @@
+name: regression
+
+on:
+  schedule:
+    - cron: '30 0 * * *'          # 06:00 IST — the run that trips the planted bug
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Preview URL to test against
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --frozen
+      - run: uv run playwright install --with-deps chromium
+
+      - name: Run acceptance subset
+        env:
+          # PR runs are restricted to smoke or regression. e2e sends SMS.
+          SBX_MARKERS: smoke or regression
+          SBX_BASE_URL: ${{ inputs.base_url || vars.SBX_BASE_URL }}
+          SBX_DB_URL: ${{ secrets.SBX_DB_URL }}
+        run: |
+          test -n "$SBX_BASE_URL" || { echo "::error::SBX_BASE_URL is empty — refusing to run"; exit 1; }
+          uv run pytest -m "$SBX_MARKERS" --json-report --json-report-file=report.json \
+            --tracing retain-on-failure
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: traces, path: traces/ }
+
+      - if: always()
+        env: { SBX_DB_URL: "${{ secrets.SBX_DB_URL }}", SBX_BASE_URL: "${{ vars.SBX_BASE_URL }}" }
+        run: uv run python report_to_db.py report.json
+
+  triage:
+    needs: test
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: traces, path: traces/ }
+
+      - name: Claude triages the failure into Linear
+        uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+        with:
+          prompt: |
+            The scheduled acceptance suite failed. Read report.json and the traces.
+            Deduplicate against open SBX bugs before filing anything.
+            File or comment on a Linear bug with labels: bug, qa-regression.
+            Then write an intent.md for it in sbx-sdlc so Stage 1 has an artifact.
+
+      # Cheap insurance: the triage job hand-rolls Linear calls and will otherwise
+      # break SILENTLY, looking like "no bugs were filed" rather than an error.
+      - name: Assert triage actually did something
+        run: |
+          test -f triage-result.json || { echo "::error::triage produced no result"; exit 1; }
+          grep -q '"created"\|"commented"' triage-result.json \
+            || { echo "::error::triage neither created nor commented on an issue"; exit 1; }
