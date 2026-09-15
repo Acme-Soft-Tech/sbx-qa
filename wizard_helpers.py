@@ -39,5 +39,18 @@ def drive_to_otp_step(page: Page, base_url: str) -> None:
     page.wait_for_selector("[data-testid='step-otp']")
 
 
+def progress_step(page: Page) -> int:
+    """Read the progress indicator's own idea of which step it is on.
+
+    Reads data-step off [data-testid="progress"] — the contract pinned in
+    sdlc/work/SBX-5/spec.md and asserted by a unit test in sbx-web, so a rename
+    breaks there rather than here.
+
+    Lives in wizard_helpers.py rather than inline in a test because AGENTS.md
+    requires it: a helper copied into two suites is a helper that diverges.
+    """
+    return int(page.get_attribute("[data-testid='progress']", "data-step") or "0")
+
+
 def current_step(page: Page) -> int:
     return int(page.get_attribute("[data-testid='funnel']", "data-step") or "0")
