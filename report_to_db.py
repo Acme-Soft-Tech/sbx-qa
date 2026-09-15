@@ -17,6 +17,14 @@ def main(report_path: str = "report.json") -> int:
         print("SBX_DB_URL unset — skipping load", file=sys.stderr)
         return 0
 
+    # This runs under `if: always()`, so a missing report means the suite died
+    # before it could write one. That is already being reported as the suite's
+    # failure; crashing here just buries it under a second, misleading traceback.
+    if not os.path.exists(report_path):
+        print(f"{report_path} not found — the suite produced no report; nothing to load",
+              file=sys.stderr)
+        return 0
+
     with open(report_path) as fh:
         report = json.load(fh)
 

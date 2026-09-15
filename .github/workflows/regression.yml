@@ -27,16 +27,18 @@ jobs:
           SBX_DB_URL: ${{ secrets.SBX_DB_URL }}
         run: |
           test -n "$SBX_BASE_URL" || { echo "::error::SBX_BASE_URL is empty — refusing to run"; exit 1; }
-          uv run pytest -m "$SBX_MARKERS" --json-report --json-report-file=report.json \
-            --tracing retain-on-failure
+          # No --tracing here: that flag comes from pytest-playwright, which this
+          # repo deliberately does not use. conftest.py starts and stops tracing
+          # itself, per test, and writes to traces/.
+          uv run pytest -m "$SBX_MARKERS" --json-report --json-report-file=report.json
 
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: traces, path: traces/ }
+        with: { name: traces, path: traces/, if-no-files-found: ignore }
 
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: report, path: report.json }
+        with: { name: report, path: report.json, if-no-files-found: warn }
 
       - if: always()
         env: { SBX_DB_URL: "${{ secrets.SBX_DB_URL }}", SBX_BASE_URL: "${{ vars.SBX_BASE_URL }}" }
