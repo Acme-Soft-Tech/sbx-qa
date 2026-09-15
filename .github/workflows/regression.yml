@@ -41,7 +41,12 @@ jobs:
         with: { name: report, path: report.json, if-no-files-found: warn }
 
       - if: always()
-        env: { SBX_DB_URL: "${{ secrets.SBX_DB_URL }}", SBX_BASE_URL: "${{ vars.SBX_BASE_URL }}" }
+        env:
+          SBX_DB_URL: ${{ secrets.SBX_DB_URL }}
+          SBX_BASE_URL: ${{ inputs.base_url || vars.SBX_BASE_URL }}
+          # Without this the markers column lands empty, and Stage 6 cannot tell a
+          # smoke-only run from a full acceptance run when comparing pass rates.
+          SBX_MARKERS: smoke or regression
         run: uv run python report_to_db.py report.json
 
   triage:
