@@ -33,8 +33,12 @@ def gql(query: str, variables: dict) -> dict:
     return body["data"]
 
 
-SEARCH = """query($q: String!) {
-  issueSearch(filter: {title: {containsIgnoreCase: $q}}, first: 5) {
+# issueSearch was removed from Linear's API — it now answers
+# {"message":"deprecated","userPresentableMessage":"This endpoint deprecated."}.
+# The replacement is the ordinary issues() connection with a title filter, scoped
+# to the team so a same-titled issue on another team cannot swallow the dedup.
+SEARCH = """query($teamId: ID!, $q: String!) {
+  issues(filter: {team: {id: {eq: $teamId}}, title: {containsIgnoreCase: $q}}, first: 5) {
     nodes { id identifier title state { type } }
   }
 }"""
@@ -78,7 +82,7 @@ def main(report_path: str = "report.json") -> int:
         f"would be richer; this exists so the loop closes without an Anthropic key._"
     )
 
-    existing = gql(SEARCH, {"q": title})["issueSearch"]["nodes"]
+    existing = gql(SEARCH, {"teamId": os.environ["LINEAR_TEAM_ID"], "q": title})["issues"]["nodes"]
     open_match = next((i for i in existing if i["state"]["type"] not in ("completed", "canceled")), None)
 
     if open_match:
