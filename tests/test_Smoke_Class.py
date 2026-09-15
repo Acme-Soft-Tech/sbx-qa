@@ -18,3 +18,7 @@ class TestSmoke:
         open_funnel(page, base_url)
         fill_name_step(page)
         assert current_step(page) == 2
+
+    def test_progress_bar_renders(self, page, base_url):
+        open_funnel(page, base_url)
+        assert page.is_visible("[data-testid='progress']")

@@ -2,6 +2,7 @@ import pytest
 
 from wizard_helpers import (
     current_step,
+    progress_step,
     drive_to_otp_step,
     fill_debt_step,
     fill_email_step,
@@ -30,3 +31,14 @@ class TestRegression:
         page.fill("[data-testid='input-email']", "not-an-email")
         page.click("[data-testid='next']")
         assert current_step(page) == 2
+
+    def test_progress_bar_tracks_step(self, page, base_url):
+        """The bar must not keep a counter of its own — it must agree with the funnel.
+
+        Checked at two steps rather than one: a bar hardcoded to 1 would pass a
+        single-step assertion.
+        """
+        open_funnel(page, base_url)
+        assert progress_step(page) == current_step(page)
+        fill_name_step(page)
+        assert progress_step(page) == current_step(page)
